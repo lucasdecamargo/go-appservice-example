@@ -1,0 +1,48 @@
+{
+    "editor.rulers": [
+        88
+    ],
+    "editor.formatOnSave": true,
+    "editor.tabSize": 4,
+    "prettier.enable": true,
+    "emeraldwalk.runonsave": {
+        "commands": [
+            {
+                "match": "\\.go$",
+                "cmd": "${userHome}/go/bin/golines ${file} -m 88 -w"
+            }
+        ]
+    },
+    "go.lintTool": "staticcheck",
+    "gopls": {
+        "ui.semanticTokens": true
+    },
+    "[go]": {
+        "editor.insertSpaces": false,
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "golang.go",
+        "editor.indentSize": "tabSize",
+        "editor.tabSize": 4,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": "explicit"
+        }
+    },
+    "[json]": {
+        "editor.quickSuggestions": {
+            "strings": true
+        },
+        "editor.suggest.insertMode": "replace",
+        "editor.autoIndent": "advanced",
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "[yaml]": {
+        "editor.autoIndent": "advanced",
+        "editor.defaultFormatter": "redhat.vscode-yaml",
+        "editor.formatOnSave": true,
+        "editor.tabSize": 2
+    },
+    "[ignore]": {
+        "editor.defaultFormatter": null
+    }
+}
