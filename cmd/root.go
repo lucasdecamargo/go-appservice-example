@@ -8,6 +8,6 @@ import (
 func NewRootCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "svcapp",
-		Short: "A brief description of your application",
+		Short: "A simple example of a Go application that can be installed as a service",
 	}
 }

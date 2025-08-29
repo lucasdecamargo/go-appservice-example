@@ -15,20 +15,35 @@ import (
 	"github.com/lucasdecamargo/kardianos"
 )
 
+const (
+	// Service configuration constants
+	serviceName        = "svcapp"
+	serviceDisplayName = "SvcApp"
+	serviceDescription = "A simple example of a Go application that can be installed as a service"
+
+	// Default timeouts
+	defaultExitTimeout = 5 * time.Second
+	defaultRunTimeout  = 30 * time.Second
+
+	// Exit modes
+	exitModeNil   = "nil"
+	exitModeRand  = "rand"
+	exitModeErr   = "err"
+	exitModePanic = "panic"
+	exitModeFatal = "fatal"
+)
+
 var (
 	ExitWith string
 	Timeout  time.Duration
 )
 
 func main() {
-	cfg := linuxServiceConfig()
-	if runtime.GOOS == "windows" {
-		cfg = windowsServiceConfig()
-	}
+	cfg := getServiceConfig()
 
 	d := daemon.NewDaemon(&daemon.DaemonConfig{
 		Args:        []string{"run"},
-		ExitTimeout: 5 * time.Second,
+		ExitTimeout: defaultExitTimeout,
 	})
 
 	rootCmd := cmd.NewRootCmd()
@@ -36,21 +51,30 @@ func main() {
 	daemonCmd := cmd.NewDaemonCmd(d, cfg)
 
 	runCmd := cmd.NewRunCmd(run)
-	runCmd.Flags().StringVarP(&ExitWith, "exit-with", "e", "rand", "Exit the program with the specified status: nil, rand, err, panic, fatal")
-	runCmd.Flags().DurationVarP(&Timeout, "timeout", "t", 30*time.Second, "Time to run before exiting")
+	runCmd.Flags().StringVarP(&ExitWith, "exit-with", "e", exitModeRand,
+		fmt.Sprintf("Exit the program with the specified status: %s, %s, %s, %s, %s",
+			exitModeNil, exitModeRand, exitModeErr, exitModePanic, exitModeFatal))
+	runCmd.Flags().DurationVarP(&Timeout, "timeout", "t", defaultRunTimeout, "Time to run before exiting")
 
 	rootCmd.AddCommand(runCmd, serviceCmd, daemonCmd)
 
 	if err := rootCmd.Execute(); err != nil {
-		os.Exit(1)
+		log.Fatal("Failed to execute command:", err)
 	}
+}
+
+func getServiceConfig() *kardianos.Config {
+	if runtime.GOOS == "windows" {
+		return windowsServiceConfig()
+	}
+	return linuxServiceConfig()
 }
 
 func linuxServiceConfig() *kardianos.Config {
 	return &kardianos.Config{
-		Name:             "svcapp",
-		DisplayName:      "SvcApp",
-		Description:      "A simple example of a Go application that can be installed as a service",
+		Name:             serviceName,
+		DisplayName:      serviceDisplayName,
+		Description:      serviceDescription,
 		WorkingDirectory: "~/.",
 		Arguments:        []string{"daemon"},
 
@@ -71,9 +95,9 @@ func linuxServiceConfig() *kardianos.Config {
 
 func windowsServiceConfig() *kardianos.Config {
 	return &kardianos.Config{
-		Name:             "svcapp",
-		DisplayName:      "SvcApp",
-		Description:      "A simple example of a Go application that can be installed as a service",
+		Name:             serviceName,
+		DisplayName:      serviceDisplayName,
+		Description:      serviceDescription,
 		WorkingDirectory: "~/.",
 		Arguments:        []string{"daemon"},
 
@@ -89,14 +113,25 @@ func run(ctx context.Context, args []string) error {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	if ExitWith == "rand" {
-		ExitWith = []string{"", "err", "panic", "fatal"}[rand.IntN(4)]
+	// Determine exit mode
+	exitMode := determineExitMode(ExitWith)
+	if exitMode != exitModeNil {
+		slog.Info("Process will exit with", "mode", exitMode)
 	}
 
-	if ExitWith != "" && ExitWith != "nil" {
-		slog.Info(fmt.Sprintf("Process will exit with %s", ExitWith))
-	}
+	// Run the main loop
+	return runMainLoop(ctx, exitMode)
+}
 
+func determineExitMode(mode string) string {
+	if mode == exitModeRand {
+		modes := []string{exitModeNil, exitModeErr, exitModePanic, exitModeFatal}
+		return modes[rand.IntN(len(modes))]
+	}
+	return mode
+}
+
+func runMainLoop(ctx context.Context, exitMode string) error {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
@@ -106,26 +141,33 @@ func run(ctx context.Context, args []string) error {
 	for {
 		select {
 		case <-ticker.C:
-			slog.Info(fmt.Sprintf("Running... %v left", time.Until(deadline).Truncate(time.Millisecond)))
+			remaining := time.Until(deadline).Truncate(time.Millisecond)
+			slog.Info("Running...", "timeLeft", remaining)
 		case <-timeoutChan:
 			slog.Info("Timed out.")
-			goto ret
+			return exitWithMode(exitMode)
 		case <-ctx.Done():
 			slog.Info("Context canceled.")
-			goto ret
+			return exitWithMode(exitMode)
 		}
 	}
+}
 
-ret:
-	slog.Info("Exiting...")
-	switch ExitWith {
-	case "err", "error":
+func exitWithMode(mode string) error {
+	slog.Info("Exiting...", "mode", mode)
+
+	switch mode {
+	case exitModeErr:
 		return fmt.Errorf("some error occurred")
-	case "panic":
+	case exitModePanic:
 		log.Panic("Panic occurred")
-	case "fatal":
+		// This line is unreachable, but needed for compilation
+		return fmt.Errorf("panic occurred")
+	case exitModeFatal:
 		log.Fatal("Fatal occurred")
+		// This line is unreachable, but needed for compilation
+		return fmt.Errorf("fatal occurred")
+	default:
+		return nil
 	}
-
-	return nil
 }
